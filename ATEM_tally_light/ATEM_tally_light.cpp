@@ -67,6 +67,10 @@
 #ifndef PIN_BLUE1
 #define PIN_BLUE1  25
 #endif
+//Define Easy Button pin for ESP32
+#ifndef BUTTON_PIN
+#define BUTTON_PIN 23  // or 22, or any other suitable GPIO
+#endif
 
 //Define LED2 color pins
 #ifndef PIN_RED2
@@ -89,6 +93,10 @@
 #endif
 #ifndef PIN_BLUE1
 #define PIN_BLUE1   5  // D1
+#endif
+//Define Easy Button pin for ESP8266
+#ifndef BUTTON_PIN
+#define BUTTON_PIN 15  // GPIO 15, commonly labeled as D8
 #endif
 
 //Define LED2 color pins
@@ -214,6 +222,41 @@ void onImprovWiFiConnectedCb(const char *ssid, const char *password)
 
 }
 
+//Easy Button to enter SoftAP mode
+bool lastButtonState = LOW;
+unsigned long lastDebounceTime = 0;
+unsigned long debounceDelay = 50;
+bool buttonState = LOW;
+//Easy Button debounce
+bool readDebouncedButton() {
+    bool reading = digitalRead(BUTTON_PIN);
+
+    if (reading != lastButtonState) {
+        lastDebounceTime = millis();
+    }
+
+    if ((millis() - lastDebounceTime) > debounceDelay) {
+        if (reading != buttonState) {
+            buttonState = reading;
+            if (buttonState == HIGH) {
+                return true;
+            }
+        }
+    }
+
+    lastButtonState = reading;
+    return false;
+}
+//Start SoftAP mode
+void startSoftAPMode() {
+	  firstRun = false;
+    Serial.println("Switching to SoftAP Mode...");
+    WiFi.softAP((String)DISPLAY_NAME + " setup"); // Enable softAP to access web interface if button pushed
+    WiFi.mode(WIFI_AP_STA);
+    setBothLEDs(LED_WHITE);
+    setStatusLED(LED_WHITE);
+}
+
 //Perform initial setup on power on
 void setup() {
     //Init pins for LED
@@ -224,8 +267,12 @@ void setup() {
     pinMode(PIN_RED2, OUTPUT);
     pinMode(PIN_GREEN2, OUTPUT);
     pinMode(PIN_BLUE2, OUTPUT);
-
+	//Init easy button pin
+	pinMode(BUTTON_PIN, INPUT);
+	
     setBothLEDs(LED_BLUE);
+	
+
     //Setup current-measuring pin - Commented out for users without batteries
     // pinMode(A0, INPUT);
 
@@ -328,7 +375,11 @@ void loop() {
         readByte = Serial.read();
         improv.handleByte(readByte);
     }
-
+    	// Easy button loop call
+	  if (readDebouncedButton()) {
+        startSoftAPMode();
+    }
+	
     switch (state) {
         case STATE_CONNECTING_TO_WIFI:
             if (WiFi.status() == WL_CONNECTED) {
